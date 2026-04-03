@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Breath AI Dashboard</title>
+</head>
+<body>
+
+<h1>Health Monitor</h1>
+
+<form id="healthForm">
+    <label for="mq3">MQ3:</label>
+    <input type="number" id="mq3" name="mq3" step="0.01" required><br><br>
+    
+    <label for="mq135">MQ135:</label>
+    <input type="number" id="mq135" name="mq135" step="0.01" required><br><br>
+    
+    <label for="mq138">MQ138:</label>
+    <input type="number" id="mq138" name="mq138" step="0.01" required><br><br>
+    
+    <label for="temp">Temperature:</label>
+    <input type="number" id="temp" name="temp" step="0.01" required><br><br>
+    
+    <label for="humidity">Humidity:</label>
+    <input type="number" id="humidity" name="humidity" step="0.01" required><br><br>
+    
+    <label for="pressure">Pressure:</label>
+    <input type="number" id="pressure" name="pressure" step="0.01" required><br><br>
+    
+    <label for="spo2">SpO2:</label>
+    <input type="number" id="spo2" name="spo2" step="0.01" required><br><br>
+    
+    <label for="hr">Heart Rate:</label>
+    <input type="number" id="hr" name="hr" required><br><br>
+
+    <label for="patient_wallet">Patient Algorand Wallet:</label>
+    <input type="text" id="patient_wallet" name="patient_wallet" required><br><br>
+
+    <label for="doctor_wallet">Doctor Algorand Wallet:</label>
+    <input type="text" id="doctor_wallet" name="doctor_wallet" required><br><br>
+
+    <label for="patient_id">Patient ID:</label>
+    <input type="text" id="patient_id" name="patient_id" required><br><br>
+
+    <label for="doctor_id">Doctor ID:</label>
+    <input type="text" id="doctor_id" name="doctor_id" required><br><br>
+
+    <button type="submit">Run Full Pipeline</button>
+</form>
+
+<p id="result"></p>
+
+<button id="patientOptInBtn">Patient Opt-in (AlgoSigner)</button>
+<button id="doctorOptInBtn">Doctor Opt-in (AlgoSigner)</button>
+<button id="doctorShareBtn">Share access on-chain (via server)</button>
+
+<script>
+async function getAlgodParams() {
+    const res = await fetch('http://127.0.0.1:5000/algod-params');
+    if (!res.ok) throw new Error('Unable to fetch algod params');
+    return res.json();
+}
+
+async function optInAsset(walletAddress, assetId) {
+    if (!window.AlgoSigner) {
+        alert('AlgoSigner is required for in-browser wallet actions.');
+        return;
+    }
+
+    const params = await getAlgodParams();
+    const txn = {
+        from: walletAddress,
+        to: walletAddress,
+        fee: params.fee,
+        firstRound: params.firstRound,
+        lastRound: params.lastRound,
+        genesisID: params.genesisID,
+        genesisHash: params.genesisHash,
+        note: AlgoSigner.encoding.stringToBase64('Opt-in to medical ASA'),
+        type: 'axfer',
+        amount: 0,
+        assetIndex: Number(assetId)
+    };
+
+    const signedTxn = await AlgoSigner.signTxn([{txn: JSON.stringify(txn)}]);
+    const sendRes = await AlgoSigner.send({txn: signedTxn[0].blob});
+    return sendRes;
+}
+
+async function shareAccessOnChain(assetId, doctorWallet) {
+    const res = await fetch('http://127.0.0.1:5000/share-access', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({asset_id: assetId, doctor_wallet: doctorWallet, amount: 1})
+    });
+    return res.json();
+}
+
+document.getElementById('patientOptInBtn').addEventListener('click', async () => {
+    const assetId = prompt('Enter Asset ID for opt-in:');
+    const wallet = document.getElementById('patient_wallet').value;
+    try {
+        const result = await optInAsset(wallet, assetId);
+        document.getElementById('result').innerText = 'Patient opt-in TxID: ' + (result.txId || result.txid || JSON.stringify(result));
+    } catch (e) {
+        document.getElementById('result').innerText = 'Patient opt-in failed: ' + e;
+    }
+});
+
+document.getElementById('doctorOptInBtn').addEventListener('click', async () => {
+    const assetId = prompt('Enter Asset ID for opt-in:');
+    const wallet = document.getElementById('doctor_wallet').value;
+    try {
+        const result = await optInAsset(wallet, assetId);
+        document.getElementById('result').innerText = 'Doctor opt-in TxID: ' + (result.txId || result.txid || JSON.stringify(result));
+    } catch (e) {
+        document.getElementById('result').innerText = 'Doctor opt-in failed: ' + e;
+    }
+});
+
+document.getElementById('doctorShareBtn').addEventListener('click', async () => {
+    const assetId = prompt('Enter Asset ID for sharing:');
+    const doctorWallet = document.getElementById('doctor_wallet').value;
+    try {
+        const result = await shareAccessOnChain(assetId, doctorWallet);
+        document.getElementById('result').innerText = 'Share access result: ' + JSON.stringify(result);
+    } catch (e) {
+        document.getElementById('result').innerText = 'Share on-chain failed: ' + e;
+    }
+});
+
+document.getElementById('healthForm').addEventListener('submit', async function(event) {
+    event.preventDefault();
+    
+    const formData = new FormData(event.target);
+    const data = {
+        mq3: parseFloat(formData.get('mq3')),
+        mq135: parseFloat(formData.get('mq135')),
+        mq138: parseFloat(formData.get('mq138')),
+        temp: parseFloat(formData.get('temp')),
+        humidity: parseFloat(formData.get('humidity')),
+        pressure: parseFloat(formData.get('pressure')),
+        spo2: parseFloat(formData.get('spo2')),
+        hr: parseInt(formData.get('hr'))
+    };
+    
+    const requestBody = {
+        ...data,
+        patient_wallet: formData.get('patient_wallet'),
+        doctor_wallet: formData.get('doctor_wallet'),
+        patient_id: formData.get('patient_id'),
+        doctor_id: formData.get('doctor_id')
+    };
+
+    const response = await fetch("http://127.0.0.1:5000/process-v1", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(requestBody)
+    });
+
+    const result = await response.json();
+    if (!response.ok && response.status !== 207) {
+        document.getElementById("result").innerText = "Error: " + JSON.stringify(result);
+        return;
+    }
+
+    document.getElementById("result").innerHTML = `
+        Prediction: ${result.prediction}<br>
+        Record ID: ${result.record_id}<br>
+        IPFS CID: ${result.ipfs_cid}<br>
+        Asset ID: ${result.asset_id}<br>
+        Asset TxID: ${result.asset_txid}<br>
+        Note: ${result.note}<br>
+        Pinata Error: ${result.pinata_error || 'none'}<br>
+        ASA Error: ${result.asa_error || 'none'}
+    `;
+});
+</script>
+
+</body>
+</html>
