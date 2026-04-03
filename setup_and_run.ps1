@@ -15,9 +15,9 @@ Notes:
   - Edit `.env` and `backend/firebase-key.json` manually to add secrets.
 #>
 
-[param(
+param(
     [switch]$SkipInstall
-)]
+)
 
 Set-StrictMode -Version Latest
 $root = Split-Path -Parent $MyInvocation.MyCommand.Definition
@@ -39,7 +39,6 @@ if (-not (Test-Path .\venv)) {
 
 # install/upgrade pip inside venv
 Write-Host "Upgrading pip in venv..."
-Start-Process -FilePath "" -NoNewWindow -ErrorAction SilentlyContinue
 & .\venv\Scripts\python.exe -m pip install --upgrade pip
 
 if (-not $SkipInstall) {
@@ -57,20 +56,21 @@ if (-not $SkipInstall) {
 # create .env from template if missing
 if (-not (Test-Path ".env") -and (Test-Path ".env.template")) {
     Copy-Item .env.template .env -Force
-    Write-Host ".env created from .env.template — edit .env to add secrets (Pinata / Algorand)."
+    Write-Host ".env created from .env.template - edit .env to add secrets (Pinata / Algorand)."
 }
 
-if (-not (Test-Path ".\backend\firebase-key.json")) {
-    Write-Warning "backend\firebase-key.json not found — Firebase features will be disabled until you add the service account file."
+if (-not (Test-Path '.\backend\firebase-key.json')) {
+    Write-Warning "backend\firebase-key.json not found - Firebase features will be disabled until you add the service account file."
 } else {
     Write-Host "Firebase service account detected."
 }
 
 Write-Host "Starting backend server in a new PowerShell window..."
-Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit","-Command","Set-Location -Path '$root'; .\venv\Scripts\python.exe .\backend\app.py"
+# Start new PowerShell that executes the app from $root as working directory
+Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit","-Command",".\venv\Scripts\python.exe .\backend\app.py" -WorkingDirectory $root
 
 Write-Host "If the server does not start, open a terminal and run:"
-Write-Host "  cd `"$root\backend`"" -ForegroundColor Yellow
+Write-Host "  cd $root\backend" -ForegroundColor Yellow
 Write-Host "  ..\venv\Scripts\python.exe app.py" -ForegroundColor Yellow
 
 Write-Host "Open http://127.0.0.1:5000/ in your browser after the server starts."
