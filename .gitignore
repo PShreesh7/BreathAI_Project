@@ -1,0 +1,27 @@
+# Virtual environment
+venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment files
+.env
+.env.*
+
+# Firebase key
+backend/firebase-key.json
+
+# Data / model artifacts
+*.pkl
+*.sqlite3
+
+# Editor files
+.vscode/
+*.suo
+*.user
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
